@@ -4,6 +4,9 @@ const { pool } = require('../config/postgres');
 const checkLogin = require('../middlewares/checkLogin');
 const { body, query } = require('express-validator');
 const { handleValidationErrors } = require('../middlewares/validator');
+const wrapper = require('../middlewares/wrapper');
+const { NotFoundException, ForbiddenException } = require('../modules/Exception');
+const { getPostByIdx, deletePostByIdx, getPostAll } = require('../service/post.service');
 
 //Apis
 //게시글 쓰기
@@ -17,29 +20,26 @@ router.post(
         .isLength({ min: 2, max: 10000 })
         .withMessage('본문은 2~10000자로 입력해주세요'),
     handleValidationErrors,
-    async (req, res, next) => {
+    wrapper(async (req, res, next) => {
         const { title, content } = req.body;
         const gameIdx = req.query.gameidx;
         const userIdx = req.decoded.userIdx;
-        try {
-            await pool.query(
-                `
-                INSERT INTO
-                    post(
-                        user_idx,
-                        game_idx,
-                        title,
-                        content
-                    )
-                VALUES
-                    ($1, $2, $3, $4)`,
-                [userIdx, gameIdx, title, content]
-            );
-            res.status(201).send();
-        } catch (err) {
-            next(err);
-        }
-    }
+
+        await pool.query(
+            `INSERT INTO
+                post(
+                    user_idx,
+                    game_idx,
+                    title,
+                    content
+                )
+            VALUES
+                ($1, $2, $3, $4)`,
+            [userIdx, gameIdx, title, content]
+        );
+
+        res.status(201).send();
+    })
 );
 
 //게시판 보기 (게시글 목록보기)
@@ -51,6 +51,7 @@ router.get('/', async (req, res, next) => {
     try {
         //7개씩 불러오기
         const offset = (page - 1) * 7;
+
         const data = await pool.query(
             `
             SELECT 
@@ -214,25 +215,23 @@ router.get('/:postidx', checkLogin, async (req, res, next) => {
 });
 
 //게시글 삭제하기
-router.delete('/:postidx', checkLogin, async (req, res, next) => {
-    const postIdx = req.params.postidx;
-    const userIdx = req.decoded.userIdx;
-    try {
-        await pool.query(
-            `
-            UPDATE post
-            SET
-                deleted_at = now()
-            WHERE
-                idx = $1
-            AND 
-                user_idx = $2`,
-            [postIdx, userIdx]
-        );
+router.delete(
+    '/:postidx',
+    checkLogin,
+    wrapper(async (req, res, next) => {
+        const postIdx = req.params.postidx;
+        const loginUser = req.decoded;
+
+        const post = await getPostByIdx(postIdx);
+
+        if (post.user_idx !== loginUser.userIdx) {
+            throw new ForbiddenException('권한이 없습니다.');
+        }
+
+        await deletePostByIdx(postIdx);
+
         res.status(200).send();
-    } catch (err) {
-        next(err);
-    }
-});
+    })
+);
 
 module.exports = router;
