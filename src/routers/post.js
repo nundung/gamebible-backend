@@ -5,7 +5,7 @@ const { body, query } = require('express-validator');
 const { handleValidationErrors } = require('../middlewares/validator');
 const wrapper = require('../middlewares/wrapper');
 const { NotFoundException, ForbiddenException } = require('../modules/Exception');
-const { getPostByIdx, deletePostByIdx, getPostAll } = require('../service/post.service');
+const { makePost, getPostByIdx, deletePostByIdx, getPostAll } = require('../service/post.service');
 
 //Apis
 //게시글 쓰기
@@ -23,19 +23,7 @@ router.post(
         const { title, content } = req.body;
         const gameIdx = req.query.gameidx;
         const userIdx = req.decoded.userIdx;
-
-        await pool.query(
-            `INSERT INTO
-                post(
-                    user_idx,
-                    game_idx,
-                    title,
-                    content
-                )
-            VALUES
-                ($1, $2, $3, $4)`,
-            [userIdx, gameIdx, title, content]
-        );
+        await makePost(userIdx, gameIdx, title, content);
 
         res.status(201).send();
     })

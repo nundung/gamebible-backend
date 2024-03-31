@@ -1,7 +1,8 @@
 const { pool } = require('../config/postgres');
 const { NotFoundException } = require('../modules/Exception');
-/** Typescript
- * 게시글 하나에 대한 타입 정의
+
+/** 게시글 하나에 대한 타입 정의
+ * Typescript
  * @typedef {{
  *  idx: number,
  *  title: string,
@@ -17,10 +18,30 @@ const { NotFoundException } = require('../modules/Exception');
  * }} Post
  */
 
-/**
- * 게시글 요약 Utility Type
+/** 게시글 요약
+ * Utility Type
  * @typedef {Omit<Post, 'content'>} SummaryPost
  */
+
+/** 게시글 쓰기
+ * @param {number} postIdx 가져올 게시글 인덱스
+ * @returns {Promise<{Post}>}
+ * @throws {BadRequestException, UnauthorizedException}
+ */
+const makePost = async (userIdx, gameIdx, title, content) => {
+    await pool.query(
+        `INSERT INTO
+            post(
+                user_idx,
+                game_idx,
+                title,
+                content
+            )
+        VALUES
+            ($1, $2, $3, $4)`,
+        [userIdx, gameIdx, title, content]
+    );
+};
 
 /**
  * 게시글 상세보기
@@ -172,6 +193,7 @@ const deletePostByIdx = async (postIdx) => {
 const createPost = async (userIdx, createDto) => {};
 
 module.exports = {
+    makePost,
     getPostByIdx,
     deletePostByIdx,
     getPostAll,
