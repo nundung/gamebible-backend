@@ -23,12 +23,17 @@ const { NotFoundException } = require('../modules/Exception');
  * @typedef {Omit<Post, 'content'>} SummaryPost
  */
 
-/** 게시글 쓰기
- * @param {number} postIdx 가져올 게시글 인덱스
+/**
+ * 게시글 생성하기
+ * @param {number} userIdx
+ * @param {{
+ *  gameIdx: number,
+ *  title: string,
+ *  content: string
+ * }} createDto
  * @returns {Promise<{Post}>}
- * @throws {BadRequestException, UnauthorizedException}
  */
-const makePost = async (userIdx, gameIdx, title, content) => {
+const createPost = async (userIdx, createDto) => {
     await pool.query(
         `INSERT INTO
             post(
@@ -39,7 +44,7 @@ const makePost = async (userIdx, gameIdx, title, content) => {
             )
         VALUES
             ($1, $2, $3, $4)`,
-        [userIdx, gameIdx, title, content]
+        [userIdx, createDto.gameIdx, createDto.title, createDto.content]
     );
 };
 
@@ -183,7 +188,7 @@ const deletePostByIdx = async (postIdx) => {
 };
 
 module.exports = {
-    makePost,
+    createPost,
     getPostByIdx,
     deletePostByIdx,
     getPostAll,
