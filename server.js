@@ -26,6 +26,7 @@ app.use((req, res, next) => {
 
 // 에러 처리 미들웨어
 app.use((err, req, res, next) => {
+    console.log(err);
     if (err instanceof Exception) {
         return res.status(err.status).send({
             message: err.message,
