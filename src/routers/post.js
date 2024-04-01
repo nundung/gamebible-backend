@@ -23,7 +23,7 @@ router.post(
         const { title, content } = req.body;
         const gameIdx = req.query.gameidx;
         const userIdx = req.decoded.userIdx;
-        await makePost(userIdx, gameIdx, title, content);
+        await createPost(userIdx, gameIdx, title, content);
 
         res.status(201).send();
     })
