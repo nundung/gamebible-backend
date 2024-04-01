@@ -1,8 +1,7 @@
 const { pool } = require('../config/postgres');
 const { NotFoundException } = require('../modules/Exception');
 
-/** 게시글 하나에 대한 타입 정의
- * Typescript
+/**
  * @typedef {{
  *  idx: number,
  *  title: string,
