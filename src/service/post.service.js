@@ -6,11 +6,11 @@ const { NotFoundException } = require('../modules/Exception');
  *  idx: number,
  *  title: string,
  *  content: string,
- *  created_at: Date,
+ *  createdAt: Date,
  *  game: {
  *      idx: number,
  *      title: string,
- *      created_at: Date,
+ *      createdAt: Date,
  *  },
  *  author: User,
  *  view: number,
@@ -125,14 +125,22 @@ const getPostByIdx = async (postIdx, userIdx) => {
 /**
  * 게시판 글 전체 가져오기
  * @param {number} gameIdx 가져올 게시판 인덱스
+ * @param {{
+ *  offset: number,
+ *  page: number
+ * }} createDto
  * @returns {Promise<{posts: SummaryPost[], meta: { offset: number, page: number }}>}
+ * @returns {}
  */
-const getPostAll = async (gameIdx, page) => {
-    const offset = (page - 1) * 20;
+const getPostAll = async (gameIdx, createDto) => {
     const result = await pool.query(
         `SELECT
-            post.*,
+            post.idx,
+            post.title,
+            post.created_at AS "createAt",
+            "user".idx AS "userIdx",
             "user".nickname,
+            "user".created_at AS "createdAt",
             -- 조회수
             (
                 SELECT
@@ -153,25 +161,30 @@ const getPostAll = async (gameIdx, page) => {
         ORDER BY
             post.idx DESC
         LIMIT
-            20
+            $3
         OFFSET
-            $2`,
-        [gameIdx, offset]
+            ($2 - 1) * $3`,
+        [gameIdx, createDto.page, createDto.offset]
     );
-    const length = result.rows.length;
-    const posts = result.rows.map((post) => ({
-        idx: post.idx,
-        title: post.title,
-        created_at: post.created_at,
-        view: post.view,
-        author: {
-            idx: post.user_idx,
-            nickname: post.nickname,
-        },
-    }));
-    const metas = { offset, page, length };
 
-    return { posts, meta: metas };
+    return {
+        posts: result.rows.map((post) => ({
+            idx: post.idx,
+            title: post.title,
+            createdAt: new Date(post.createdAt),
+            view: post.view,
+            author: {
+                idx: post.userIdx,
+                nickname: post.nickname,
+                createdAt: new Date(post.createdAt),
+            },
+        })),
+        meta: {
+            length: result.rowCount,
+            offset: createDto.offset,
+            page: createDto.page,
+        },
+    };
 };
 
 /**
