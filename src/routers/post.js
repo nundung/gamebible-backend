@@ -53,7 +53,7 @@ router.get(
         const { page, title } = req.query;
         try {
             //20개씩 불러오기
-            const offset = (page - 1) * 20;
+            const offset = (page - 1) * 7;
             const data = await pool.query(
                 `
             SELECT 
