@@ -18,8 +18,7 @@ const { NotFoundException } = require('../modules/Exception');
  * }} Post
  */
 
-/** 게시글 요약
- * Utility Type
+/**
  * @typedef {Omit<Post, 'content'>} SummaryPost
  */
 
