@@ -1,3 +1,8 @@
 /**
- * @typedef {{idx: number, name: string, createdAt: Date}} User
+ * @typedef {{
+ *  idx: number,
+ *  name: string,
+ *  createdAt: Date,
+ *  deletedAt: Date,
+ * }} User
  */
