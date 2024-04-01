@@ -182,16 +182,6 @@ const deletePostByIdx = async (postIdx) => {
     return;
 };
 
-/**
- *
- * @param {*} userIdx
- * @param {{
- *  title: string,
- *  contents: string,
- * }} createDto
- */
-const createPost = async (userIdx, createDto) => {};
-
 module.exports = {
     makePost,
     getPostByIdx,
