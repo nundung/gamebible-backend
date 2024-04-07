@@ -1,6 +1,6 @@
 /**
  * @typedef {{
- *  idx: number,
+ *  userIdx: number,
  *  name: string,
  *  createdAt: Date,
  *  deletedAt: Date,
