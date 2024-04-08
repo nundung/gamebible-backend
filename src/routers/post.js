@@ -31,10 +31,10 @@ router.get(
         const createDto = { page, offset }; // createDto 객체 생성 및 설정
 
         // service
-        const postList = await getPostAllByGameIdx(gameIdx, createDto);
+        const result = await getPostAllByGameIdx(gameIdx, createDto);
 
         // controller
-        res.status(200).send(postList);
+        res.status(200).send(result);
     })
 );
 
