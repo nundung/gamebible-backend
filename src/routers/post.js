@@ -18,9 +18,6 @@ const {
 //Apis
 
 //게시판 보기 (게시글 목록보기)
-//페이지네이션
-//deleted_at 값이 null이 아닌 경우에는 탈퇴한 사용자
-// controller
 router.get(
     '/',
     checkLogin,
@@ -30,11 +27,16 @@ router.get(
         const offset = (page - 1) * 7;
         const createDto = { page, offset }; // createDto 객체 생성 및 설정
 
-        // service
-        const result = await getPostAllByGameIdx(gameIdx, createDto);
+        const result = await getPostAllByGameIdx(gameIdx, {
+            page: page,
+        });
 
         // controller
-        res.status(200).send(result);
+        res.status(200).send({
+            data: {
+                posts: result.posts,
+            },
+        });
     })
 );
 
@@ -46,30 +48,15 @@ router.get(
         const postIdx = req.params.postidx;
         const userIdx = req.decoded.userIdx;
 
-        const conn = await pool.connect();
-        try {
-            await conn.query('BEGIN');
+        const post = await getPostByIdx(postIdx);
 
-            const posts = await getPostByIdx(postIdx, conn);
-
-            await increaseViewByPostIdx(postIdx, userIdx, conn);
-
-            await conn.query('COMMIT');
-
-            res.status(200).send({
-                data: posts,
-            });
-        } catch (err) {
-            await conn.query('ROLLBACK');
-            throw err;
-        }
-
-        res.status(200).send(posts);
+        res.status(200).send({
+            data: post,
+        });
     })
 );
 
 //게시글 쓰기
-//이 api는 프론트와 상의 후 수정하기로..
 router.post(
     '/',
     checkLogin,
@@ -83,29 +70,17 @@ router.post(
         const { title, content } = req.body;
         const gameIdx = req.query.gameidx;
         const userIdx = req.decoded.userIdx;
-        try {
-            await pool.query(
-                `
-                INSERT INTO
-                    post(
-                        user_idx,
-                        game_idx,
-                        title,
-                        content
-                    )
-                VALUES
-                    ($1, $2, $3, $4)`,
-                [userIdx, gameIdx, title, content]
-            );
-            res.status(201).send();
-        } catch (err) {
-            next(err);
-        }
+
+        await createPost(gameIdx, userIdx, {
+            title,
+            content,
+        });
+
+        res.status(201).end();
     }
 );
 
 //게시글 쓰기
-//이 api는 프론트와 상의 후 수정하기로..
 router.post(
     '/',
     checkLogin,
@@ -131,58 +106,22 @@ router.post(
 );
 
 //게시글 검색하기
-//페이지네이션
 router.get(
     '/search',
     query('title').trim().isLength({ min: 2 }).withMessage('2글자 이상입력해주세요'),
     async (req, res, next) => {
         const { page, title } = req.query;
-        try {
-            //20개씩 불러오기
-            const offset = (page - 1) * 7;
-            const data = await pool.query(
-                `
-            SELECT 
-                post.title, 
-                post.created_at, 
-                "user".nickname,
-                -- 조회수
-                (
-                    SELECT
-                        COUNT(*)::int
-                    FROM
-                        view
-                    WHERE
-                        post_idx = post.idx 
-                ) AS view
-            FROM 
-                post 
-            LEFT JOIN
-                view ON post.idx = view.post_idx
-            JOIN 
-                "user" ON post.user_idx = "user".idx
-            WHERE
-                post.title LIKE '%${title}%'
-            AND 
-                post.deleted_at IS NULL
-            ORDER BY
-                post.idx DESC
-            LIMIT
-                7
-            OFFSET
-                $1`,
-                [offset]
-            );
-            const length = data.rows.length;
-            res.status(200).send({
-                data: data.rows,
-                page,
-                offset,
-                length,
-            });
-        } catch (err) {
-            return next(err);
-        }
+
+        const result = await getPostAllByGameIdx(null, {
+            page,
+            keyword: title,
+        });
+
+        res.status(200).send({
+            data: {
+                posts: result.posts,
+            },
+        });
     }
 );
 
@@ -196,8 +135,8 @@ router.delete(
 
         const post = await getPostByIdx(postIdx);
 
-        if (post.user_idx !== loginUser.userIdx) {
-            throw new ForbiddenException('권한이 없습니다.');
+        if (post.author.idx !== loginUser.idx) {
+            throw new ForbiddenException('Permssion denied');
         }
 
         await deletePostByIdx(postIdx);
@@ -205,8 +144,5 @@ router.delete(
         res.status(200).send();
     })
 );
-
-//게시글에 이미지 업로드하면 s3랑 게시글에 첨부되는 기능
-//게시글 업로드를 취소하면 이미지가 삭제 되도록 어쩌구...
 
 module.exports = router;
