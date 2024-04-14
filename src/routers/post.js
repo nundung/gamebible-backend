@@ -52,7 +52,7 @@ router.get(
 
             const posts = await getPostByIdx(postIdx, conn);
 
-            await increaseViewByPostIdx(postIdx, userIdx, conn);
+            await increasePostViewByIdx(postIdx, userIdx, conn);
 
             await conn.query('COMMIT');
 
