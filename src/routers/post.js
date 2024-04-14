@@ -14,27 +14,57 @@ const {
     getPostAllByGameIdx,
     increasePostViewByIdx,
 } = require('../service/post.service');
+const { CostExplorer } = require('aws-sdk');
+const { ResultWithContextImpl } = require('express-validator/src/chain');
 
 //Apis
+
+//게시글 업로드
+//이 api는 프론트와 상의 후 수정하기로..
+router.post(
+    '/',
+    checkLogin,
+    body('title').trim().isLength({ min: 2, max: 40 }).withMessage('제목은 2~40자로 입력해주세요'),
+    body('content')
+        .trim()
+        .isLength({ min: 2, max: 10000 })
+        .withMessage('본문은 2~10000자로 입력해주세요'),
+    handleValidationErrors,
+    wrapper(async (req, res, next) => {
+        const gameIdx = req.query.gameidx;
+        const userIdx = req.decoded.userIdx;
+        const { title, content } = req.body;
+        const createDto = { title, content };
+
+        // service
+        await createPost(userIdx, gameIdx, createDto);
+
+        // controller
+        res.status(201).end();
+    })
+);
 
 //게시판 보기 (게시글 목록보기)
 //페이지네이션
 //deleted_at 값이 null이 아닌 경우에는 탈퇴한 사용자
 // controller
 router.get(
-    '/',
+    '/all',
     checkLogin,
     wrapper(async (req, res, next) => {
-        const gameIdx = req.query.gameidx;
+        const gameIdx = parseInt(req.query.gameidx);
         const page = parseInt(req.query.page) || 1;
-        const offset = (page - 1) * 7;
-        const createDto = { page, offset }; // createDto 객체 생성 및 설정
+        const getDto = { page }; // createDto 객체 생성 및 설정
 
         // service
-        const result = await getPostAllByGameIdx(gameIdx, createDto);
+        const result = await getPostAllByGameIdx(gameIdx, getDto);
 
         // controller
-        res.status(200).send(result);
+        if (!result.posts) {
+            res.status(204);
+        } else {
+            res.status(200).send(result);
+        }
     })
 );
 
@@ -65,68 +95,6 @@ router.get(
         }
 
         res.status(200).send(posts);
-    })
-);
-
-//게시글 쓰기
-//이 api는 프론트와 상의 후 수정하기로..
-router.post(
-    '/',
-    checkLogin,
-    body('title').trim().isLength({ min: 2, max: 40 }).withMessage('제목은 2~40자로 입력해주세요'),
-    body('content')
-        .trim()
-        .isLength({ min: 2, max: 10000 })
-        .withMessage('본문은 2~10000자로 입력해주세요'),
-    handleValidationErrors,
-    async (req, res, next) => {
-        const { title, content } = req.body;
-        const gameIdx = req.query.gameidx;
-        const userIdx = req.decoded.userIdx;
-        try {
-            await pool.query(
-                `
-                INSERT INTO
-                    post(
-                        user_idx,
-                        game_idx,
-                        title,
-                        content
-                    )
-                VALUES
-                    ($1, $2, $3, $4)`,
-                [userIdx, gameIdx, title, content]
-            );
-            res.status(201).send();
-        } catch (err) {
-            next(err);
-        }
-    }
-);
-
-//게시글 쓰기
-//이 api는 프론트와 상의 후 수정하기로..
-router.post(
-    '/',
-    checkLogin,
-    body('title').trim().isLength({ min: 2, max: 40 }).withMessage('제목은 2~40자로 입력해주세요'),
-    body('content')
-        .trim()
-        .isLength({ min: 2, max: 10000 })
-        .withMessage('본문은 2~10000자로 입력해주세요'),
-    handleValidationErrors,
-    wrapper(async (req, res, next) => {
-        const { title, content } = req.body;
-        const gameIdx = req.query.gameidx;
-        const userIdx = req.decoded.userIdx;
-
-        const post = await createPost(userIdx, {
-            gameIdx,
-            content,
-            title,
-        });
-
-        res.status(200).send(post);
     })
 );
 

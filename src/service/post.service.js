@@ -83,7 +83,7 @@ class Post {
      */
     static createPost(result) {
         return new Post({
-            postIdx: result.idx,
+            idx: result.idx,
             title: result.title,
             content: result.content,
             createdAt: result.createdAt,
@@ -92,26 +92,26 @@ class Post {
                 idx: result.userIdx,
                 nickname: result.nickname,
             },
-            game: {
-                idx: result.number,
-                title: result.string,
-                createdAt: result.string,
-            },
         });
+    }
+
+    static createPostList(rows) {
+        return rows.map((row) => this.createPost(row));
     }
 }
 
 /**
- * 게시글 생성하기
+ * 게시글 업로드
  * @param {number} userIdx
+ * @param {number} gameIdx
  * @param {{
- *  gameIdx: number,
  *  title: string,
  *  content: string
  * }} createDto
  * @returns {Promise<void>}
  */
-const createPost = async (userIdx, createDto, conn = pool) => {
+const createPost = async (userIdx, gameIdx, createDto, conn = pool) => {
+    const { title, content } = createDto;
     const result = await conn.query(
         `INSERT INTO
             post(
@@ -122,23 +122,43 @@ const createPost = async (userIdx, createDto, conn = pool) => {
             )
         VALUES
             ($1, $2, $3, $4)`,
-        [userIdx, createDto.gameIdx, createDto.title, createDto.content]
+        [userIdx, gameIdx, createDto.title, createDto.content]
     );
     return;
 };
 
 /**
- * 게시글 목록 가져오기
+ * 게시판 보기 (게시글 목록보기)
  * @param {number} gameIdx 가져올 게시판 인덱스
  * @param  {{
- *  offset: number,
+ *  postsPerPage: number,
  *  page: number
- * }} createDto
- * @returns {Promise<{posts: SummaryPost[], meta: { offset: number, page: number }}>}
+ * }} getDto
+ * @returns {Promise<{
+ *  posts: SummaryPost[],
+ *  meta: {page: number,
+ *      maxPage: number,
+ *      totalPosts: number,
+ *      offset: number,
+ *      length: number},
+ * }>}
  * @returns {}
  */
-const getPostAllByGameIdx = async (gameIdx, createDto) => {
-    const { page, offset } = createDto;
+const getPostAllByGameIdx = async (gameIdx, getDto) => {
+    const { page } = getDto;
+    const postsPerPage = 20;
+    // totalposts를 가져오는 별도의 쿼리
+    const totalPostsResult = await pool.query(
+        `SELECT
+            COUNT(*)::int AS "totalPosts"
+        FROM
+            post
+        WHERE
+            game_idx = $1
+        AND 
+            deleted_at IS NULL`,
+        [gameIdx]
+    );
     const result = await pool.query(
         `SELECT
             post.idx,
@@ -167,13 +187,38 @@ const getPostAllByGameIdx = async (gameIdx, createDto) => {
         ORDER BY
             post.idx DESC
         LIMIT
-            $3
+            10
         OFFSET
-            ($2 - 1) * $3`,
-        [gameIdx, page, offset]
+            ($2 - 1) * 10`,
+        [gameIdx, page]
     );
-    console.log(result);
-    return Post.createPost(result.rows);
+
+    return {
+        posts: Post.createPostList(result.rows),
+        meta: {
+            page,
+            maxPage: Math.ceil(totalPostsResult.rows[0].totalPosts / postsPerPage),
+            totalPosts: totalPostsResult.rows[0].totalPosts,
+            offset: (page - 1) * postsPerPage,
+            length: result.rows.length,
+        },
+    };
+};
+
+/**
+ * 조회수 반영하기
+ * @param {number} postIdx
+ * @returns {Promise<void>}
+ */
+const increasePostViewByIdx = async (postIdx, conn = pool) => {
+    await conn.query(
+        `INSERT INTO view
+            (post_idx, user_idx)
+        VALUES
+            ($1, $2)`,
+        [postIdx, userIdx]
+    );
+    return;
 };
 
 /**
@@ -215,23 +260,11 @@ const getPostByIdx = async (postIdx, conn = pool) => {
 };
 
 /**
- * 조회수 반영하기
- * @param {number} postIdx
- * @returns {Promise<void>}
+ * 게시글 검색하기
  */
-const increasePostViewByIdx = async (postIdx, conn = pool) => {
-    await conn.query(
-        `INSERT INTO view
-            (post_idx, user_idx)
-        VALUES
-            ($1, $2)`,
-        [postIdx, userIdx]
-    );
-    return;
-};
 
 /**
- * 게시글 하나 삭제하기
+ * 게시글 삭제하기
  * @param {number} postIdx
  * @returns {Promise<void>}
  */
