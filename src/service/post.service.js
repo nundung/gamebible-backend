@@ -144,7 +144,6 @@ const createPost = async (userIdx, gameIdx, createDto, conn = pool) => {
  * @returns {}
  */
 const getPostAllByGameIdx = async (gameIdx, getDto) => {
-    const { page } = getDto;
     const postsPerPage = 20;
     // totalposts를 가져오는 별도의 쿼리
     const totalPostsResult = await pool.query(
@@ -189,7 +188,7 @@ const getPostAllByGameIdx = async (gameIdx, getDto) => {
             10
         OFFSET
             ($2 - 1) * 10`,
-        [gameIdx, page]
+        [gameIdx, getDto.page]
     );
 
     return {
