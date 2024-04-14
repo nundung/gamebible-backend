@@ -69,34 +69,28 @@ router.get(
 );
 
 //게시글 상세보기
-router.get(
-    '/:postidx',
-    checkLogin,
-    wrapper(async (req, res, next) => {
-        const postIdx = req.params.postidx;
-        const userIdx = req.decoded.userIdx;
+router.get('/:postidx', checkLogin, async (req, res, next) => {
+    const postIdx = req.params.postidx;
+    const userIdx = req.decoded.userIdx;
 
-        const conn = await pool.connect();
-        try {
-            await conn.query('BEGIN');
+    const conn = await pool.connect();
+    try {
+        await conn.query('BEGIN');
 
-            const posts = await getPostByIdx(postIdx, conn);
+        const posts = await getPostByIdx(postIdx, conn);
 
-            await increasePostViewByIdx(postIdx, userIdx, conn);
+        await increasePostViewByIdx(postIdx, userIdx, conn);
 
-            await conn.query('COMMIT');
+        await conn.query('COMMIT');
 
-            res.status(200).send({
-                data: posts,
-            });
-        } catch (err) {
-            await conn.query('ROLLBACK');
-            throw err;
-        }
-
-        res.status(200).send(posts);
-    })
-);
+        res.status(200).send({
+            data: posts,
+        });
+    } catch (err) {
+        await conn.query('ROLLBACK');
+        throw err;
+    }
+});
 
 //게시글 검색하기
 //페이지네이션
