@@ -111,8 +111,7 @@ class Post {
  * @returns {Promise<void>}
  */
 const createPost = async (userIdx, gameIdx, createDto, conn = pool) => {
-    const { title, content } = createDto;
-    const result = await conn.query(
+    await conn.query(
         `INSERT INTO
             post(
                 user_idx,
