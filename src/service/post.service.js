@@ -114,7 +114,7 @@ const getPostAllByGameIdx = async (gameIdx, getDto) => {
     );
 
     return {
-        posts: Post.createPostList(result.rows),
+        posts: Post.getPostList(result.rows),
         meta: {
             page,
             maxPage: Math.ceil(totalPostsResult.rows[0].totalPosts / postsPerPage),
@@ -159,8 +159,7 @@ const getPostByIdx = async (postIdx, conn = pool) => {
     if (!result.rows[0]) {
         throw new NotFoundException('Cannot find post');
     }
-
-    return Post.createPost(result);
+    return Post.getPost(result.rows[0]);
 };
 
 /**
