@@ -1,5 +1,7 @@
-.env
-
 node_modules/
 
+.env
+
 db.vuerd.json
+
+*.sh
