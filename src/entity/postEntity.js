@@ -58,7 +58,7 @@ class Post {
     /**
      * @param {Post} result
      */
-    static createPost(result) {
+    static getPost(result) {
         return new Post({
             idx: result.idx,
             title: result.title,
@@ -72,7 +72,7 @@ class Post {
         });
     }
 
-    static createPostList(rows) {
+    static getPostList(rows) {
         return rows.map((row) => this.createPost(row));
     }
 }
