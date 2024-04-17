@@ -1,4 +1,4 @@
-const PostEntity = require('../post/postEntity');
+const PostEntity = require('./postEntity');
 
 module.exports = class PostController {
     postService;
