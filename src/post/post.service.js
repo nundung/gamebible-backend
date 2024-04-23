@@ -1,210 +1,118 @@
 const { pool } = require('../config/postgres');
 const { NotFoundException, ForbiddenException } = require('../modules/Exception');
-const { Post } = require('./postEntity');
+const CreateDto = require('./dto/createPost.dto');
+const GetDto = require('./dto/getPost.dto');
+const SearchDto = require('./dto/searchPost.dto');
+const PostRepository = require('./post.repository');
+const PostEntity = require('./post.entity');
 
 /**
- * @typedef {{
- *  idx: number,
- *  title: string,
- *  content: string,
- *  createdAt: Date,
- *  view: number,
- *  author: User,
- *  game: {
- *      idx: number,
- *      title: string,
- *      createdAt: Date,
- *  },
- * }} Post
+ * @typedef {Omit<PostEntity, 'content'>} SelectPost
  */
 
-/**
- * @typedef {Omit<Post, 'content'>} SelectPost
- */
+module.exports = class PostService {
+    postRepository;
 
-/**
- * 게시글 업로드
- * @param {number} userIdx
- * @param {number} gameIdx
- * @param {{
- *  title: string,
- *  content: string
- * }} createDto
- * @returns {Promise<void>}
- */
-const createPost = async (userIdx, gameIdx, createDto, conn = pool) => {
-    await conn.query(
-        `INSERT INTO
-            post(
-                user_idx,
-                game_idx,
-                title,
-                content
-            )
-        VALUES
-            ($1, $2, $3, $4)`,
-        [userIdx, gameIdx, createDto.title, createDto.content]
-    );
-    return;
-};
+    /**
+     * @param {PostRepository} postRepository
+     */
+    constructor(postRepository) {
+        this.postRepository = postRepository;
+    }
 
-/**
- * 게시판 보기 (게시글 목록보기)
- * @param {number} gameIdx 가져올 게시판 인덱스
- * @param  {{
- *  postsPerPage: number,
- *  page: number
- * }} getDto
- * @returns {Promise<{
- *  posts: SummaryPost[],
- *  meta: {page: number,
- *      maxPage: number,
- *      totalPosts: number,
- *      offset: number,
- *      length: number},
- * }>}
- * @returns {}
- */
-const getPostAllByGameIdx = async (gameIdx, getDto) => {
-    const postsPerPage = 20;
-    // totalposts를 가져오는 별도의 쿼리
-    const totalPostsResult = await pool.query(
-        `SELECT
-            COUNT(*)::int AS "totalPosts"
-        FROM
-            post
-        WHERE
-            game_idx = $1
-        AND 
-            deleted_at IS NULL`,
-        [gameIdx]
-    );
-    const result = await pool.query(
-        `SELECT
-            post.idx,
-            post.title,
-            post.created_at AS "createAt",
-            "user".idx AS "userIdx",
-            "user".nickname,
-            "user".created_at AS "createdAt",
-            -- 조회수
-            (
-                SELECT
-                    COUNT(*)::int
-                FROM
-                    view
-                WHERE
-                    post_idx = post.idx
-            ) AS view
-        FROM
-            post
-        JOIN
-            "user" ON post.user_idx = "user".idx
-        WHERE
-            game_idx = $1
-        AND
-            post.deleted_at IS NULL
-        ORDER BY
-            post.idx DESC
-        LIMIT
-            10
-        OFFSET
-            ($2 - 1) * 10`,
-        [gameIdx, getDto.page]
-    );
+    /**
+     * 게시글 업로드
+     * @param {number} userIdx
+     * @param {number} gameIdx
+     * @param {CreateDto} createDto
+     * @returns {Promise<PostEntity>}
+     */
+    async createPost(userIdx, gameIdx, createDto) {
+        const post = await this.postRepository.insert(userIdx, gameIdx, {
+            title: createDto.title,
+            content: createDto.content,
+        });
 
-    return {
-        posts: Post.getPostList(result.rows),
-        meta: {
-            page,
-            maxPage: Math.ceil(totalPostsResult.rows[0].totalPosts / postsPerPage),
-            totalPosts: totalPostsResult.rows[0].totalPosts,
-            offset: (page - 1) * postsPerPage,
-            length: result.rows.length,
-        },
+        return PostEntity.postEntity(post);
+    }
+
+    /**
+     * 게시판 보기 (게시글 목록보기)
+     * @param {number} gameIdx 가져올 게시판 인덱스
+     * @param {GetDto} getDto
+     * @returns {Promise<{
+     *  postList: SummaryPost[],
+     *  meta: {page: number,
+     *      maxPage: number,
+     *      totalPosts: number,
+     *      offset: number,
+     *      length: number},
+     * }>}
+     */
+    getPostByGameIdx = async (gameIdx, getDto) => {
+        const postList = await this.postRepository.select(gameIdx, {
+            page: getDto.page,
+        });
+        return postList.map((post) => PostEntity.postEntity(post));
     };
-};
 
-/**
- * 게시글 상세보기
- * @param {number} postIdx 가져올 게시글 인덱스
- * @returns {Promise<Post>}
- */
-const getPostByIdx = async (postIdx, conn = pool) => {
-    const result = await conn.query(
-        `SELECT
-            post.title,
-            post.content,
-            post.created_at AS "createdAt",
-            "user".nickname,
-            -- 조회수 불러오기
-            (
-                SELECT
-                    COUNT(*)::int
-                FROM
-                    view
-                WHERE
-                    post_idx = post.idx 
-            ) AS view
-        FROM 
-            post
-        JOIN
-            "user" ON post.user_idx = "user".idx
-        WHERE
-            post.idx = $1
-        AND 
-            post.deleted_at IS NULL`,
-        [postIdx]
-    );
-    if (!result.rows[0]) {
-        throw new NotFoundException('Cannot find post');
-    }
-    return Post.getPost(result.rows[0]);
-};
+    /**
+     * 게시글 상세보기
+     * @param {number} postIdx 가져올 게시글 인덱스
+     * @returns {Promise<Post>}
+     */
+    getPostByIdx = async (postIdx, conn = pool) => {
+        const post = await this.postRepository.select(postIdx);
+        return PostEntity.postEntity(post);
+    };
 
-/**
- * 조회수 반영하기
- * @param {number} postIdx
- * @param {number} userIdx
- * @returns {Promise<void>}
- */
-const increasePostViewByIdx = async (postIdx, userIdx, conn = pool) => {
-    await pool.query(
-        `INSERT INTO view
-            (post_idx, user_idx)
-        VALUES
-            ($1, $2)`,
-        [postIdx, userIdx]
-    );
-    return;
-};
+    /**
+     * 게시글 조회수 반영하기
+     * @param {number} postIdx
+     * @param {number} userIdx
+     * @returns {Promise<void>}
+     */
+    increasePostViewByIdx = async (postIdx, userIdx, conn = pool) => {
+        const post = await this.postRepository.select(postIdx, userIdx);
+        return PostEntity.postEntity(post);
+    };
 
-/**
- * 게시글 검색하기
- */
-// const searchPost = async();
+    /**
+     * 게시글 검색하기
+     * @param {{
+     *  title: string,
+     *  page: string,
+     * }} searchDto
+     * @returns {Promise<{
+     *  posts: SummaryPost[],
+     *  meta: {
+     *   page: number,
+     *   maxPage: number,
+     *   totalPosts: number,
+     *   offset: number,
+     *   length: number},
+     * }>}
+     */
+    searchPostByTitle = async (searchDto) => {
+        const postList = await this.postRepository.insert(searchDto);
+        return postList.map((post) => PostEntity.postEntity(post));
+    };
 
-/**
- * 게시글 삭제하기
- * @param {number} postIdx
- * @returns {Promise<void>}
- */
-const deletePostByIdx = async (postIdx, userIdx) => {
-    const post = await getPostByIdx(postIdx);
+    /**
+     * 게시글 삭제하기
+     * @param {number} postIdx
+     * @param {number} userIdx
+     * @returns {Promise<void>}
+     */
+    deletePost = async (postIdx, userIdx) => {
+        const post = await getPostByIdx(postIdx);
 
-    if (post.author.idx !== userIdx) {
-        throw new ForbiddenException('Permission denied');
-    }
+        if (post.author.idx !== userIdx) {
+            throw new ForbiddenException('Permission denied');
+        }
 
-    await pool.query(`UPDATE post SET deleted_at = NOW() WHERE idx = $1`, [postIdx]);
+        await pool.query(`UPDATE post SET deleted_at = NOW() WHERE idx = $1`, [postIdx]);
 
-    return;
-};
-
-module.exports = {
-    createPost,
-    getPostByIdx,
-    deletePostByIdx,
-    getPostAllByGameIdx,
-    increasePostViewByIdx,
+        return;
+    };
 };
