@@ -1,4 +1,9 @@
-const PostEntity = require('./postEntity');
+const PostEntity = require('./post.entity');
+const UserEntity = require('../auth/entity/user.entity');
+const CreatePostDto = require('./dto/createPost.dto');
+const GetPostDto = require('./dto/getPost.dto');
+const SearchPostDto = require('./dto/searchPost.dto');
+const PostService = require('./post.service');
 
 module.exports = class PostController {
     postService;
@@ -11,128 +16,77 @@ module.exports = class PostController {
     }
 
     //게시글 업로드
-    async createPost(req, res, next) {
-        const gameIdx = req.query.gameidx;
-        const userIdx = req.decoded.userIdx;
-        const { title, content } = req.body;
-        const createDto = { title, content };
+    createPost = async (req, res) => {
+        const userIdx = UserEntity.userEntity(req.decoded.userIdx);
+        const gameIdx = PostEntity.postEntity(req.query.gameIdx);
+        const createDto = CreatePostDto.createPostDto({
+            title: req.query.title,
+            content: req.query.content,
+        }); // createDto 객체 생성 및 설정
 
         // service
-        await createPost(userIdx, gameIdx, createDto);
-
-        // controller
+        await this.postService.createPost(userIdx, gameIdx, createDto);
         res.status(201).end();
-    }
+    };
 
     //게시판 보기 (게시글 목록보기)
-    async getPostAllByGameIdx(req, res, next) {
-        const gameIdx = parseInt(req.query.gameidx);
-        const page = parseInt(req.query.page) || 1;
-        const getDto = { page }; // createDto 객체 생성 및 설정
+    getPosByGameIdx = async (req, res) => {
+        const gameIdx = UserEntity.userEntity(req.decoded.gameIdx);
+        const getDto = GetPostDto.getPostDto({
+            page: req.query.page,
+        }); // getDto 객체 생성 및 설정
 
         // service
-        const result = await getPostAllByGameIdx(gameIdx, getDto);
-
-        // controller
+        const postList = await this.postService.getPostByGameIdx(gameIdx, getDto);
         if (!result.posts) {
             res.status(204);
         } else {
-            res.status(200).send(result);
+            res.status(200).send(postList);
         }
-    }
+    };
 
     //게시글 상세보기
-    async getPostByIdx(req, res, next) {
+    getPostByIdx = async (req, res, next) => {
+        const userIdx = UserEntity.userEntity(req.decoded.userIdx);
         const postIdx = req.params.postidx;
-        const userIdx = req.decoded.userIdx;
-
-        const post = await getPostByIdx(postIdx);
-
         const conn = await pool.connect();
         try {
             await conn.query('BEGIN');
 
-            const posts = await getPostByIdx(postIdx, conn);
-
-            await increasePostViewByIdx(postIdx, userIdx, conn);
-
+            // service
+            const post = await this.postService.getPostByIdx(postIdx, conn);
+            await this.postService.increasePostViewByIdx(postIdx, userIdx, conn);
             await conn.query('COMMIT');
-
-            res.status(200).send({
-                data: posts,
-            });
+            res.status(200).send({ data: post });
         } catch (err) {
             await conn.query('ROLLBACK');
             return next(err);
         } finally {
             conn.release();
         }
-    }
+    };
 
     //게시글 검색하기
-    async searchPostByTitle(req, res, next) {
-        const { page, title } = req.query;
-        try {
-            //20개씩 불러오기
-            const offset = (page - 1) * 7;
-            const data = await pool.query(
-                `
-            SELECT 
-                post.title, 
-                post.created_at, 
-                "user".nickname,
-                -- 조회수
-                (
-                    SELECT
-                        COUNT(*)::int
-                    FROM
-                        view
-                    WHERE
-                        post_idx = post.idx 
-                ) AS view
-            FROM 
-                post 
-            LEFT JOIN
-                view ON post.idx = view.post_idx
-            JOIN 
-                "user" ON post.user_idx = "user".idx
-            WHERE
-                post.title LIKE '%${title}%'
-            AND 
-                post.deleted_at IS NULL
-            ORDER BY
-                post.idx DESC
-            LIMIT
-                7
-            OFFSET
-                $1`,
-                [offset]
-            );
-            const length = data.rows.length;
-            res.status(200).send({
-                data: data.rows,
-                page,
-                offset,
-                length,
-            });
-        } catch (err) {
-            return next(err);
-        }
-    }
+    searchPostByTitle = async (req, res) => {
+        const searchDto = SearchPostDto.searchPostDto({
+            page: req.query.page,
+            title: req.query.title,
+        });
+
+        // service
+        const postList = await this.postService.searchPostByTitle(searchDto);
+
+        res.status(200).send(postList);
+    };
 
     //게시글 삭제하기
-    async deletePostByIdx(req, res, next) {
-        const postIdx = req.params.postidx;
-        const loginUser = req.decoded;
+    deletePost = async (req, res) => {
+        const postIdx = PostEntity.postEntity(req.params.postidx);
+        const userIdx = UserEntity.userEntity(req.decoded.userIdx);
 
-        const post = await getPostByIdx(postIdx);
+        // service
+        await this.postService.deletePost(postIdx, userIdx);
 
-        if (post.user_idx !== loginUser.userIdx) {
-            throw new ForbiddenException('권한이 없습니다.');
-        }
-
-        await deletePostByIdx(postIdx);
-
-        res.status(200).send();
-    }
+        res.status(200).end();
+    };
 };
